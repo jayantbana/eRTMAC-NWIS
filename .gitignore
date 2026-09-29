@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+# Generated data (rebuild with: python -m nwis.build_all)
+backend/data/
+# Node
+frontend/node_modules/
+frontend/dist/
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
