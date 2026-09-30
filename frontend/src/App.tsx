@@ -1,62 +1,58 @@
 import { useEffect, useState } from "react";
-import { api, type Meta, type WellSummary } from "./api";
-import EvidenceDrawer from "./components/EvidenceDrawer";
-import WellDrawer from "./components/WellDrawer";
-import { AppState, useApp } from "./state";
+import { RotateCcw, ServerOff } from "lucide-react";
+import { api, type Meta } from "./api";
+import { Logo } from "./components/Chrome";
+import Landing from "./landing/Landing";
+import { useRoute } from "./router";
 import { useReplay } from "./useReplay";
-import { Loading } from "./ui";
-import Ask from "./views/Ask";
-import Atlas from "./views/Atlas";
-import Cockpit from "./views/Cockpit";
-import Correlation from "./views/Correlation";
-import Knowledge from "./views/Knowledge";
+import Workspace, { NAV } from "./Workspace";
 
-type Tab = "cockpit" | "correlation" | "atlas" | "ask" | "kb";
-const TABS: [Tab, string][] = [["cockpit", "Well cockpit"], ["correlation", "Offsets & correlation"], ["atlas", "Formation risk atlas"], ["ask", "Ask NWIS"], ["kb", "Knowledge & evaluation"]];
+type MetaX = Meta & { faults?: [number, number][][] };
 
 export default function App() {
-  const [meta, setMeta] = useState<(Meta & { faults?: [number, number][][] }) | null>(null);
+  const route = useRoute();
+  const [meta, setMeta] = useState<MetaX | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Lives above the routes so a running replay survives a visit to the landing page.
+  const replay = useReplay();
   useEffect(() => { api.meta().then(setMeta).catch((e) => setErr(String(e))); }, []);
-  if (err) return <div className="center" style={{ height: "100%" }}><div className="notice">Cannot reach NWIS API: {err}. Start the backend: <span className="mono">uvicorn nwis.api.main:app --port 8000</span></div></div>;
-  if (!meta) return <Loading what="Connecting to NWIS" />;
-  return <AppState meta={meta}><Shell faults={meta.faults ?? []} /></AppState>;
+
+  const view = route.page === "landing" ? "landing" : route.module;
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const mod = NAV.find((n) => n.id === view);
+    document.title = mod ? `${mod.label} · NWIS` : "NWIS · Nearby Wells Intelligence System";
+  }, [view]);
+
+  if (route.page === "landing") return <Landing meta={meta} />;
+  if (err) return <ApiError err={err} />;
+  if (!meta) {
+    return (
+      <div className="full-center">
+        <div className="col" style={{ alignItems: "center", gap: 18 }}>
+          <Logo size={64} />
+          <div className="loading" role="status" style={{ padding: 0, fontSize: "1.0625rem" }}><span className="spinner" aria-hidden />Connecting to NWIS…</div>
+        </div>
+      </div>
+    );
+  }
+  return <Workspace meta={meta} module={route.module} query={route.query} replay={replay} />;
 }
 
-function Shell({ faults }: { faults: [number, number][][] }) {
-  const { meta, evidence, wellDrawer, radius } = useApp();
-  const [tab, setTab] = useState<Tab>("cockpit");
-  const [wells, setWells] = useState<WellSummary[]>([]);
-  const [offsets, setOffsets] = useState<any[]>([]);
-  const replay = useReplay();
-  useEffect(() => { api.wells().then(setWells); }, []);
-  useEffect(() => { api.offsets(meta.active_well_id, radius).then(setOffsets); }, [radius]);
-
+function ApiError({ err }: { err: string }) {
   return (
-    <div className="app">
-      <div className="topbar">
-        <div className="brand"><b>eRTMAC · NWIS</b><span>Nearby Wells Intelligence System</span></div>
-        <div className="tabs">
-          {TABS.map(([k, l]) => <button key={k} className={`tab ${tab === k ? "active" : ""}`} onClick={() => setTab(k)}>{l}</button>)}
+    <div className="full-center">
+      <div className="err-card" role="alert">
+        <div className="ic-tile t-saffron"><ServerOff aria-hidden /></div>
+        <h1 style={{ fontSize: "1.75rem" }}>The NWIS service is not reachable</h1>
+        <p className="ink2">The workspace needs the NWIS API. Start it from the <code>backend</code> folder, then try again:</p>
+        <p><code>.venv/Scripts/python -m uvicorn nwis.api.main:app --port 8000</code></p>
+        <p className="small muted">Details: {err}</p>
+        <div className="row wrap">
+          <button className="btn btn-primary btn-lg" onClick={() => location.reload()}><RotateCcw /> Try again</button>
+          <a className="btn btn-lg" href="#/">Back to home</a>
         </div>
-        <span className="spacer" />
-        <span className="badge">Active: <b style={{ color: "#fbbf24" }}>{meta.active_well_name}</b>{replay.live.last ? ` @ ${replay.live.last.record.hole_md.toFixed(0)} m` : ""}</span>
-        <span className="badge">{meta.counts.wells} wells · {meta.counts.documents} reports · {meta.counts.events} events</span>
-        <span className="badge synthetic" title="All wells, reports and drilling data are synthetic demo data, not real OIL records">{meta.data_mode} DATA</span>
       </div>
-      <div className="main">
-        {wells.length === 0 ? <Loading /> : (
-          <>
-            {tab === "cockpit" && <Cockpit replay={replay} wells={wells} faults={faults} />}
-            {tab === "correlation" && <Correlation />}
-            {tab === "atlas" && <Atlas />}
-            {tab === "ask" && <Ask />}
-            {tab === "kb" && <Knowledge />}
-          </>
-        )}
-      </div>
-      {evidence && <EvidenceDrawer target={evidence} />}
-      {wellDrawer && <WellDrawer wellId={wellDrawer} offsets={offsets} />}
     </div>
   );
 }

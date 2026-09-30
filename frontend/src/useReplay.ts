@@ -46,6 +46,8 @@ export function useReplay() {
     sock.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       setS((p) => {
+        // After stop, ignore ticks that were already in flight so the reset state sticks.
+        if (p.status === "idle") return p;
         if (m.type === "init") {
           return { ...p, status: "running", track: m.track, alerts: m.alerts, notices: m.notices, records: [], last: null, progress: m.progress };
         }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowRight, CheckCircle2, CircleHelp, FileText, MessageSquareText, Quote, Search, TriangleAlert } from "lucide-react";
 import { api, type AskResult } from "../api";
 import { useApp } from "../state";
 import { Loading, outcomeBadge } from "../ui";
@@ -12,85 +13,127 @@ const EXAMPLES = [
   "Which wells had cementing problems near Well A?",
 ];
 
+// Plain names for how the answer was produced.
+const MODE_LABEL: Record<string, string> = {
+  extractive: "Quoted word for word", typed_tool: "Counted from the database", llm_verified: "Summarised, citations checked",
+};
+
 export default function Ask() {
   const { meta, radius, openEvidence } = useApp();
-  const [q, setQ] = useState(EXAMPLES[0]);
+  const [q, setQ] = useState("");
   const [res, setRes] = useState<AskResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   const run = async (question: string) => {
+    if (!question.trim()) return;
     setQ(question);
     setBusy(true);
-    try { setRes(await api.ask(question, radius)); } finally { setBusy(false); }
+    setErr(null);
+    try { setRes(await api.ask(question, radius)); } catch (e) { setErr(String(e)); } finally { setBusy(false); }
   };
+  const ok = res?.evidence_status === "sufficient";
+
   return (
-    <div className="view" style={{ maxWidth: 1100, margin: "0 auto" }}>
-      <div className="panel">
-        <div className="panel-h">Ask NWIS · answers only from ingested OIL reports, with page citations</div>
-        <div className="panel-b col">
-          <div className="row">
-            <input type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run(q)} style={{ flex: 1, padding: "9px 12px", fontSize: 14 }}
-              placeholder="e.g. What happened in Barail in wells near Well A?" />
-            <button className="btn primary" onClick={() => run(q)} disabled={busy}>Ask</button>
-          </div>
-          <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-            {EXAMPLES.map((e) => <span key={e} className="chip" onClick={() => run(e)}>{e}</span>)}
-          </div>
-          <div className="small dim">
-            Mode: {meta.llm_enabled ? `local LLM (${meta.llm_model}) over retrieved evidence + citation verifier` : "extractive (verbatim sentences only). Set NWIS_LLM_MODEL to enable a local Ollama model."}
-            {" "}Counting questions use typed database queries, not generated arithmetic.
+    <div className="page narrow">
+      <div className="ask-hero">
+        <div className="ic-tile t-pink"><MessageSquareText aria-hidden /></div>
+        <h1 className="page-title" style={{ fontSize: "2.5rem" }}>Ask the drilling reports</h1>
+        <p className="page-sub" style={{ margin: "12px auto 0" }}>
+          Answers come only from the ingested reports. Every sentence is quoted word for word and links to its page. If the reports don't say, NWIS tells you so.
+        </p>
+        <form className="ask-box" onSubmit={(e) => { e.preventDefault(); run(q); }} role="search">
+          <Search aria-hidden />
+          <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. What happened in Barail in wells near Well A?" aria-label="Your question" />
+          <button className="btn btn-primary btn-lg" type="submit" disabled={busy || !q.trim()}>Ask <ArrowRight /></button>
+        </form>
+      </div>
+
+      {!res && !busy && (
+        <div style={{ marginTop: 8 }}>
+          <div className="examples">
+            {EXAMPLES.map((e) => <button key={e} className="ex" onClick={() => run(e)}><CircleHelp aria-hidden />{e}</button>)}
           </div>
         </div>
-      </div>
-      {busy && <Loading what="Searching reports" />}
+      )}
+
+      {busy && <div className="card" style={{ marginTop: 28 }}><Loading what="Searching the reports" /></div>}
+      {err && !busy && <div className="banner warn" style={{ marginTop: 28 }}><TriangleAlert aria-hidden />Could not get an answer: {err}</div>}
+
       {res && !busy && (
-        <div className="panel" style={{ marginTop: 12 }}>
-          <div className="panel-h">
-            Answer <span className="spacer" />
-            <span className={`badge ${res.evidence_status === "sufficient" ? "ok" : "warn"}`}>{res.evidence_status === "sufficient" ? "evidence found" : "insufficient evidence"}</span>
-            <span className="badge">{res.mode.replace("_", " ")}</span>
+        <section className="card" style={{ marginTop: 28 }} aria-labelledby="answer-h">
+          <div className="card-h">
+            <div><div className="small strong muted">You asked</div><h3 id="answer-h" style={{ fontSize: "1.25rem" }}>{res.question}</h3></div>
+            <div className="row wrap">
+              {ok ? <span className="badge b-green"><CheckCircle2 /> Evidence found</span> : <span className="badge b-amber"><TriangleAlert /> Not enough evidence</span>}
+              <span className="badge b-gray">{MODE_LABEL[res.mode] ?? res.mode.replace("_", " ")}</span>
+            </div>
           </div>
-          <div className="panel-b col">
-            <div style={{ fontSize: 14 }}>{res.answer}</div>
+          <div className="card-b col" style={{ gap: 16 }}>
+            <p className="answer">{res.answer}</p>
             {res.bullets.map((b, i) => (
-              <div key={i} className="row" style={{ alignItems: "flex-start" }}>
-                <span className="dim">•</span>
-                <div style={{ flex: 1 }}>
-                  “{b.text}”{" "}
-                  {b.citations.map((c, k) => (
-                    <span key={k} className="cite" onClick={() => openEvidence({ kind: "page", docId: c.doc_id, page: c.page, quote: c.quote })}>
-                      {c.well} · {c.doc_type} {c.report_date ?? ""} · p.{c.page}
-                    </span>
-                  ))}
+              <div key={i} className="quote">
+                <Quote aria-hidden />
+                <div style={{ minWidth: 0 }}>
+                  <p>“{b.text}”</p>
+                  <div className="cites">
+                    {b.citations.map((c, k) => (
+                      <button key={k} className="cite" onClick={() => openEvidence({ kind: "page", docId: c.doc_id, page: c.page, quote: c.quote })}>
+                        <FileText aria-hidden />{c.well} · {c.doc_type} {c.report_date ?? ""} · page {c.page}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}
             {res.table.length > 0 && (
-              <table className="t small">
-                <thead><tr><th>Well</th><th>MD</th><th>Formation</th><th>Event</th><th>Outcome</th><th>NPT</th><th>Source</th></tr></thead>
-                <tbody>
-                  {res.table.map((r: any) => (
-                    <tr key={r.event_id} className="click" onClick={() => openEvidence({ kind: "event", eventId: r.event_id })}>
-                      <td>{r.well}</td><td className="mono">{r.md.toFixed(0)}</td><td>{r.formation}</td><td>{r.type}{r.subtype ? ` (${r.subtype})` : ""}</td>
-                      <td>{outcomeBadge(r.outcome)}</td><td className="mono">{r.npt_h ?? "–"}</td>
-                      <td><span className="cite">{r.citation.doc_id} p.{r.citation.page}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {res.evidence_status === "insufficient" && res.closest && res.closest.length > 0 && (
-              <div className="small muted">Closest passages (not answering the question):{" "}
-                {res.closest.map((c: any, i: number) => (
-                  <span key={i} className="cite" onClick={() => openEvidence({ kind: "page", docId: c.doc_id, page: c.page_no })}>{c.doc_id} p.{c.page_no}</span>
-                ))}
+              <div className="table-wrap" style={{ border: "1px solid var(--line)", borderRadius: 16 }}>
+                <table className="t">
+                  <thead><tr><th>Well</th><th>Depth</th><th>Rock layer</th><th>Problem</th><th>Outcome</th><th>Time lost</th><th>Source</th></tr></thead>
+                  <tbody>
+                    {res.table.map((r: any) => (
+                      <tr key={r.event_id} className="click" onClick={() => openEvidence({ kind: "event", eventId: r.event_id })}>
+                        <td className="nowrap"><b>{r.well}</b></td><td className="n">{r.md.toFixed(0)} m</td><td>{r.formation}</td>
+                        <td>{r.type}{r.subtype ? <span className="muted"> ({r.subtype})</span> : ""}</td>
+                        <td>{outcomeBadge(r.outcome)}</td><td className="n">{r.npt_h != null ? `${r.npt_h} h` : "–"}</td>
+                        <td><span className="cite"><FileText aria-hidden />{r.citation.doc_id} p.{r.citation.page}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-            <div className="small dim">
-              Understood as: {res.parsed.intent} · families {res.parsed.families.join(", ") || "any"} · formations {res.parsed.formations.join(", ") || "any"}
-              {" "}· scope {res.parsed.scope_wells ? `${res.parsed.scope_wells.length} well(s)` : "whole field"}
+            {!ok && res.closest && res.closest.length > 0 && (
+              <div className="banner note">
+                <FileText aria-hidden />
+                <div>
+                  Closest passages found (they do not answer the question):
+                  <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+                    {res.closest.map((c: any, i: number) => (
+                      <button key={i} className="cite" onClick={() => openEvidence({ kind: "page", docId: c.doc_id, page: c.page_no })}>{c.doc_id} p.{c.page_no}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="row wrap small muted" style={{ gap: 8 }}>
+              <span className="strong">Understood as:</span>
+              <span className="badge b-gray">{res.parsed.intent}</span>
+              <span className="badge b-gray">problems: {res.parsed.families.join(", ") || "any"}</span>
+              <span className="badge b-gray">layers: {res.parsed.formations.join(", ") || "any"}</span>
+              <span className="badge b-gray">scope: {res.parsed.scope_wells ? `${res.parsed.scope_wells.length} well(s)` : "whole field"}</span>
             </div>
           </div>
-        </div>
+          <div className="card-sep" />
+          <div className="card-b" style={{ paddingTop: 16 }}>
+            <div className="row wrap" style={{ justifyContent: "space-between" }}>
+              <span className="small muted">
+                {meta.llm_enabled ? `Local language model (${meta.llm_model}) over retrieved evidence, checked by a citation verifier.` : "Extractive mode: answers use verbatim sentences only."}
+                {" "}Counting questions use database queries, not generated arithmetic.
+              </span>
+              <button className="btn btn-soft" onClick={() => { setRes(null); setQ(""); }}>Ask another question</button>
+            </div>
+          </div>
+        </section>
       )}
     </div>
   );

@@ -1,102 +1,101 @@
-import { useEffect, useState } from "react";
-import { api, type Alert, type Offset, type RiskTrack, type WellSummary } from "../api";
-import AlertDetail from "../components/AlertDetail";
+import type { ReactNode } from "react";
+import { Activity, ArrowDown, BellRing, Gauge, Info, Layers, ShieldCheck, Target } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { Alert, Offset, RiskTrack } from "../api";
 import DepthTrack from "../components/DepthTrack";
-import LivePanel from "../components/LivePanel";
-import MapPanel from "../components/MapPanel";
+import { AlertsCard, ReadingsCard, ReplayBar } from "../components/Live";
 import { useApp } from "../state";
 import type { useReplay } from "../useReplay";
-import { FAMILY_COLOR, Loading } from "../ui";
+import {
+  FAMILY_COLOR, FAMILY_INK, FAMILY_SOFT, FORMATION_LINE, FamilyDot, Loading, PageHeader, TIER_COLOR, TIER_RANK, fmt, formationAt, vars,
+} from "../ui";
 
-export default function Cockpit({ replay, wells, faults }: { replay: ReturnType<typeof useReplay>; wells: WellSummary[]; faults: [number, number][][] }) {
-  const { meta, radius, setRadius, openEvidence, openWell, dataVersion } = useApp();
-  const [offsets, setOffsets] = useState<Offset[]>([]);
-  const [track, setTrack] = useState<RiskTrack | null>(null);
-  const [alertOpen, setAlertOpen] = useState<string | null>(null);
+export default function Cockpit({ replay, track, offsets, onOpenAlert }: {
+  replay: ReturnType<typeof useReplay>; track: RiskTrack | null; offsets: Offset[]; onOpenAlert: (a: Alert) => void;
+}) {
+  const { meta, radius, openEvidence } = useApp();
   const { live } = replay;
 
-  useEffect(() => {
-    // Demo convenience: ?autostart=2790&speed=600 starts the replay immediately.
-    const q = new URLSearchParams(location.search);
-    if (q.get("autostart") && live.status === "idle") replay.start(+q.get("autostart")!, +(q.get("speed") ?? 300), radius);
-  }, []);
-
-  useEffect(() => {
-    api.offsets(meta.active_well_id, radius).then(setOffsets);
-    api.track(meta.active_well_id, radius).then(setTrack);
-  }, [radius, dataVersion]);
-
   const shownTrack = live.track ?? track;
-  const bit = live.last?.record?.hole_md ?? (live.status === "idle" ? null : null);
+  const bit: number | null = live.last?.record?.hole_md ?? null;
   const look = live.last ? Math.max(meta.thresholds.lookahead_min_m, (live.last.rop_1h ?? 0) * meta.thresholds.lookahead_hours) : meta.thresholds.lookahead_min_m;
   const relevant = offsets.filter((o) => o.overall >= meta.thresholds.relevance_include);
-  const alert = live.alerts.find((a) => a.id === alertOpen) ?? null;
-  const upcoming = (shownTrack?.zones ?? []).filter((z) => z.md_to > (bit ?? meta.active_current_md));
+  const ref = bit ?? meta.active_current_md;
+  const upcoming = [...(shownTrack?.zones ?? [])].sort((a, b) => a.md_from - b.md_from).filter((z) => z.md_to > ref);
+  const next = upcoming[0];
+  const fmTop = formationAt(shownTrack?.tops, ref);
+  const fm = live.last?.formation ?? (fmTop ? { code: fmTop.code, name: fmTop.name, kind: fmTop.kind } : null);
+  const raised = live.alerts.filter((a) => a.tier);
+  const topTier = raised.reduce<string | null>((m, a) => ((TIER_RANK[a.tier!] ?? 0) > (TIER_RANK[m ?? ""] ?? 0) ? a.tier : m), null);
+  const start = (md: number, speed: number = live.speed) => replay.start(md, speed, radius);
 
   return (
-    <div className="cockpit">
-      <div className="panel">
-        <div className="panel-h">
-          Offset wells
-          <span className="spacer" />
-          <span className="small" style={{ textTransform: "none", letterSpacing: 0 }}>radius</span>
-          <input type="range" min={2} max={20} step={1} value={radius} onChange={(e) => setRadius(+e.target.value)} style={{ width: 90 }} />
-          <span className="mono small" style={{ width: 42 }}>{radius} km</span>
-        </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <MapPanel wells={wells} offsets={offsets} selected={null} onSelect={(id) => openWell(id)} faults={faults} />
-        </div>
-        <div style={{ borderTop: "1px solid var(--line)", maxHeight: "34%", overflow: "auto" }}>
-          <table className="t small">
-            <thead><tr><th>Offset</th><th>km</th><th>Relevance</th><th>Why</th></tr></thead>
-            <tbody>
-              {offsets.slice(0, 12).map((o) => (
-                <tr key={o.well_id} className="click" onClick={() => openWell(o.well_id)} style={{ opacity: o.overall >= meta.thresholds.relevance_include ? 1 : 0.55 }}>
-                  <td><b>{o.name}</b></td>
-                  <td className="mono">{o.surface_distance_km.toFixed(1)}</td>
-                  <td className="mono">{o.overall.toFixed(2)}</td>
-                  <td className="dim">{o.explanation}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="page">
+      <PageHeader
+        eyebrow="Real-time risk watch" icon={Activity} title={`Live monitoring · ${meta.active_well_name}`}
+        sub={<>{meta.active_well_name} is compared with <b>{relevant.length} relevant nearby wells</b>. NWIS warns the team before the bit reaches an interval where those wells had problems.</>}
+        actions={<ReplayBar live={live} onStart={start} onPause={replay.pause} onResume={replay.resume} onStop={replay.stop} onSpeed={replay.setSpeed} />}
+      />
+
+      <div className="kpis">
+        <Kpi icon={ArrowDown} label="Bit depth" value={fmt.int(ref, bit != null ? 1 : 0)} unit="m" sub={bit != null ? "Measured depth, live" : "Last recorded depth"} />
+        <Kpi icon={Layers} label="Rock layer now" value={fm?.name ?? "–"} text accent={fm ? FORMATION_LINE[fm.code] : undefined}
+          sub={fm ? (fm.kind === "prognosed" ? "As per plan (prognosis)" : "Top confirmed while drilling") : "–"} />
+        <Kpi icon={Gauge} label="Drilling rate" value={live.last ? fmt.n(live.last.rop_1h, 1) : "–"} unit={live.last ? "m/h" : undefined} sub="Average over the last hour" />
+        <Kpi icon={Target} label="Next risk zone" value={next ? next.label : "None ahead"} text valueColor={next ? FAMILY_INK[next.family] : "var(--green-ink)"}
+          accent={next ? FAMILY_COLOR[next.family] : "var(--green)"}
+          sub={next ? `${ref >= next.md_from ? "Bit is inside" : `${fmt.int(next.md_from - ref)} m ahead`} · ${fmt.int(next.md_from)}–${fmt.int(next.md_to)} m` : "No zones below the bit"} />
+        <Kpi icon={BellRing} label="Active alerts" value={String(raised.length)} accent={topTier ? TIER_COLOR[topTier] : "var(--green)"}
+          valueColor={topTier ? TIER_COLOR[topTier] : undefined} sub={topTier ? `Highest level: ${topTier.toLowerCase()}` : "All clear"} />
       </div>
 
-      <div className="panel">
-        <div className="panel-h">
-          {meta.active_well_name} · look-ahead risk track
-          <span className="spacer" />
-          <span className="small" style={{ textTransform: "none", letterSpacing: 0 }}>{relevant.length} relevant offsets · {shownTrack?.projected_events.length ?? 0} projected events</span>
-        </div>
-        <div className="panel-b flush" style={{ display: "flex", flexDirection: "column" }}>
-          <div className="row" style={{ padding: "6px 10px", gap: 6, flexWrap: "wrap", borderBottom: "1px solid var(--line)" }}>
-            <span className="small muted">Risk zones ahead:</span>
-            {upcoming.length === 0 && <span className="small dim">none</span>}
+      {live.notices.slice(-2).map((n, i) => (
+        <div key={i} className="banner info" style={{ marginBottom: 16 }}><Info aria-hidden /><span><b>Layer top confirmed.</b> {n.text}</span></div>
+      ))}
+
+      <div className="live-grid">
+        <section className="card" aria-labelledby="track-h">
+          <div className="card-h">
+            <div>
+              <h3 id="track-h">Risk ahead of the drill bit</h3>
+              <p>Problems recorded in {relevant.length} relevant nearby wells, lined up by rock layer and projected onto {meta.active_well_name}.</p>
+            </div>
+            <span className="badge b-blue">{shownTrack?.projected_events.length ?? 0} projected events</span>
+          </div>
+          <div className="zone-row">
+            <span className="lbl">Coming up:</span>
+            {upcoming.length === 0 && <span className="small muted">No risk zones below the bit</span>}
             {upcoming.map((z) => (
-              <span key={z.id} className="chip small" style={{ borderColor: FAMILY_COLOR[z.family] }} title={z.wells.join(", ")}>
-                <span style={{ color: FAMILY_COLOR[z.family] }}>{z.label}</span> {z.md_from.toFixed(0)}–{z.md_to.toFixed(0)} m · {Math.round(z.peak * 100)}%
+              <span key={z.id} className="zchip" style={vars({ zc: FAMILY_COLOR[z.family], zs: FAMILY_SOFT[z.family], zi: FAMILY_INK[z.family] })}
+                title={`Seen in ${z.wells.join(", ")}`}>
+                <FamilyDot family={z.family} /><b>{z.label}</b>{fmt.int(z.md_from)}–{fmt.int(z.md_to)} m · {Math.round(z.peak * 100)}%
               </span>
             ))}
           </div>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            {shownTrack ? (
-              <DepthTrack track={shownTrack} bitMd={bit} lookahead={look} onEvent={(id) => openEvidence({ kind: "event", eventId: id })} />
-            ) : <Loading />}
-          </div>
+          {shownTrack
+            ? <DepthTrack track={shownTrack} bitMd={bit} lookahead={look} onEvent={(id) => openEvidence({ kind: "event", eventId: id })} />
+            : <Loading what="Building the risk track" />}
+        </section>
+
+        <div className="stack">
+          <AlertsCard alerts={live.alerts} onOpen={onOpenAlert} />
+          <ReadingsCard live={live} onStart={(md) => start(md)} />
         </div>
       </div>
 
-      <LivePanel
-        live={live}
-        onStart={(md, sp) => replay.start(md, sp, radius)}
-        onPause={replay.pause}
-        onResume={replay.resume}
-        onStop={replay.stop}
-        onSpeed={replay.setSpeed}
-        onAlert={(a: Alert) => setAlertOpen(a.id)}
-      />
-      {alert && <AlertDetail alert={alert} onClose={() => setAlertOpen(null)} onAck={(r) => replay.ack(alert.id, r)} />}
+      <p className="footnote"><ShieldCheck aria-hidden />Decision support only. Alerts summarise historical evidence from nearby wells and live indicators; the drilling engineer keeps full authority.</p>
+    </div>
+  );
+}
+
+function Kpi({ icon: Icon, label, value, unit, sub, accent, valueColor, text }: {
+  icon: LucideIcon; label: string; value: ReactNode; unit?: string; sub: string; accent?: string; valueColor?: string; text?: boolean;
+}) {
+  return (
+    <div className={`kpi${accent ? " accent" : ""}`} style={accent ? vars({ kc: accent }) : undefined}>
+      <div className="kpi-top"><div className="kpi-ic"><Icon aria-hidden /></div><span className="kpi-l">{label}</span></div>
+      <div className={`kpi-v${text ? " txt" : ""}`} style={valueColor ? { color: valueColor } : undefined}>{value}{unit && <small>{unit}</small>}</div>
+      <div className="kpi-s" title={sub}>{sub}</div>
     </div>
   );
 }

@@ -4,7 +4,9 @@
 
 > All wells, reports and drilling data here are **synthetic demo data**. They are not real OIL records, and the UI labels them that way. The ingestion pipeline is built so that real OIL documents and feeds can replace the demo data without redesign.
 
-![Cockpit during live replay](docs/screenshots/01-cockpit-live.png)
+![Landing page](docs/screenshots/00-landing.png)
+
+![Live monitoring during the demo replay](docs/screenshots/01-cockpit-live.png)
 
 ## Quick start
 
@@ -15,7 +17,7 @@ Requirements: Python 3.11+ and Node 18+. You don't need Docker, a GPU, internet 
 ./run.sh           # Linux / macOS / Git Bash
 ```
 
-Then open **http://localhost:8000**. To start straight into the demo replay, open **http://localhost:8000/?autostart=2740&speed=300**.
+Then open **http://localhost:8000** for the landing page, and select **Open workspace** to enter the tool. To start straight into the demo replay, open **http://localhost:8000/?autostart=2740&speed=300**.
 
 The first build takes about 5 minutes, mostly OCR of the scanned reports. OCR results are cached, so later builds take about 1 minute.
 
@@ -36,13 +38,13 @@ Optional: a local LLM for prose answers. Run `ollama pull qwen2.5:3b`, then set 
 
 | Step | Where | What to show | PS req |
 |---|---|---|---|
-| 1 | Cockpit map | Radius 10 km. **Well G is 2 km away but ranks low**: it sits across a fault, with thinner Tipam and no Namsang. **Well E, 8 km away, ranks higher**: same compartment. Click a well to see the relevance breakdown. | R1 |
-| 2 | Offsets & correlation | Flattened on top of Barail. The mud losses in B and D line up in lower Tipam even though their MDs are 2,769 m and 2,891 m. | R3 |
-| 3 | Formation risk atlas | Tipam × mud loss: posterior 29% (90% CI 7–57%), 2 of 5 relevant wells, mean NPT 24.8 h. Barail × stuck pipe and overpressure. | R4 |
-| 4 | Cockpit → Start replay (from 2,740 m) | Risk zones ahead: **mud loss 2,792–2,826 m**, **stuck pipe 2,854–2,880 m**, **overpressure 2,890–2,908 m** (PS scenario: 2,820 / 2,870 / 2,900 m). | R5 |
-| 5 | Alerts | ADVISORY 52 m ahead → CAUTION on entering the zone → **WARNING about 1 m after the real loss begins** (flow-out deficit). A pit transfer at 2,765 m raises nothing. Once the Barail top is picked 6 m shallower than prognosed, the zones re-align and the alerts keep their identity. | R6 |
+| 1 | Nearby wells | Radius 10 km. **Well G is 2 km away but ranks low**: it sits across a fault, with thinner Tipam and no Namsang. **Well E, 8 km away, ranks higher**: same compartment. Click a well to see the relevance breakdown. | R1 |
+| 2 | Compare wells | Aligned on the top of Barail. The mud losses in B and D line up in lower Tipam even though their MDs are 2,769 m and 2,891 m. | R3 |
+| 3 | Risk by rock layer | Tipam × mud loss: posterior 29% (90% CI 7–57%), 2 of 5 relevant wells, mean NPT 24.8 h. Barail × stuck pipe and overpressure. | R4 |
+| 4 | Live monitoring → Start live replay (from 2,740 m) | Risk zones ahead: **mud loss 2,792–2,826 m**, **stuck pipe 2,854–2,880 m**, **overpressure 2,890–2,908 m** (PS scenario: 2,820 / 2,870 / 2,900 m). | R5 |
+| 5 | Alerts (Live monitoring) | ADVISORY 52 m ahead → CAUTION on entering the zone → **WARNING about 1 m after the real loss begins** (flow-out deficit). A pit transfer at 2,765 m raises nothing. Once the Barail top is picked 6 m shallower than prognosed, the zones re-align and the alerts keep their identity. | R6 |
 | 6 | Click an alert | History vs live probability, live indicators, the offset events behind the zone with document and page links, and *what was done before*: ranked mitigations with outcomes, plus the practice that worked in trouble-free Well E. | R7 |
-| 7 | Ask NWIS | "What caused the stuck pipe in Well C and how was it freed?" returns an answer quoting a **scanned** DDR (OCR); clicking a citation opens the page with the sentence highlighted. "Any kick problems in Well G?" returns **insufficient evidence**. Then the Knowledge & evaluation tab shows the measured results. | R2 |
+| 7 | Ask the reports | "What caused the stuck pipe in Well C and how was it freed?" returns an answer quoting a **scanned** DDR (OCR); clicking a citation opens the page with the sentence highlighted. "Any kick problems in Well G?" returns **insufficient evidence**. Then **Knowledge base → Accuracy report** shows the measured results. | R2 |
 
 ## Measured results (synthetic benchmark with hidden ground truth)
 
@@ -74,7 +76,7 @@ These are prototype numbers on synthetic data, where the hazard model is random 
 | §11 API | `backend/nwis/api/main.py` (OpenAPI docs at `/docs`) |
 | §13 Synthetic field with ground truth | `backend/nwis/synthetic/` |
 | §14 Evaluation harness | `backend/nwis/evaluation.py` |
-| §10 Cockpit UI | `frontend/src/` |
+| §10 Landing page and workspace UI | `frontend/src/` (`landing/`, `views/`, `components/`) |
 
 ## Prototype simplifications (what a pilot would change)
 
