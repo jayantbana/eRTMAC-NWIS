@@ -1,4 +1,14 @@
 // Typed client for the NWIS API.
+// Empty base = same origin (dev proxy, or the API serving the built frontend).
+// Set VITE_API_URL (e.g. https://ertmac.onrender.com) when the frontend is hosted elsewhere.
+export const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+export const apiUrl = (path: string) => `${API_BASE}${path}`;
+export const wsUrl = (path: string) => {
+  const u = new URL(apiUrl(path), location.href);
+  u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+  return u.toString();
+};
+
 export type Family = "LC" | "SP" | "OP" | "TQ" | "CM";
 export const FAMILIES: Family[] = ["LC", "SP", "OP", "TQ", "CM"];
 
@@ -100,7 +110,7 @@ export interface RecAction {
 }
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init);
+  const r = await fetch(apiUrl(url), init);
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   return r.json() as Promise<T>;
 }

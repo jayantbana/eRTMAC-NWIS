@@ -3,7 +3,7 @@ import {
   BadgeCheck, Check, ClipboardCheck, ExternalLink, Eye, FileSearch, FileText, History, Info, Library, MessageSquareText, Radar, ScanText, Search, Timer, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { api, type EventBrief } from "../api";
+import { api, apiUrl, type EventBrief } from "../api";
 import { useApp } from "../state";
 import { EVENT_SHORT, FamilyDot, Loading, PageHeader, Ring, Seg, fmt, outcomeBadge, statusBadge } from "../ui";
 
@@ -230,7 +230,7 @@ function Docs() {
                   <td className="nowrap">{d.report_date ?? "–"}</td>
                   <td className="n">{d.pages}</td>
                   <td>{d.ocr_pages > 0 ? <span className="badge b-violet">Scanned · OCR</span> : <span className="badge b-blue">Digital text</span>}</td>
-                  <td><a className="btn btn-sm" href={`/api/documents/${d.doc_id}/pdf`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>PDF <ExternalLink /></a></td>
+                  <td><a className="btn btn-sm" href={apiUrl(`/api/documents/${d.doc_id}/pdf`)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>PDF <ExternalLink /></a></td>
                 </tr>
               ))}
             </tbody>

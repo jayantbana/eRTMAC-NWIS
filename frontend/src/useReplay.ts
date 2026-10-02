@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Alert, RiskTrack } from "./api";
+import { wsUrl, type Alert, type RiskTrack } from "./api";
 
 export interface Rec {
   t: number; bit_md: number; hole_md: number; rop: number; wob: number; rpm: number; torque: number; hookload: number; spp: number;
@@ -32,8 +32,7 @@ export function useReplay() {
 
   const connect = useCallback(() => {
     if (ws.current && (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)) return;
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const sock = new WebSocket(`${proto}://${location.host}/api/ws/replay`);
+    const sock = new WebSocket(wsUrl("/api/ws/replay"));
     ws.current = sock;
     sock.onopen = () => {
       pending.current.forEach((m) => sock.send(JSON.stringify(m)));

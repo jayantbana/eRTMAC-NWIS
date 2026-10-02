@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, FileText, ScanText, X } from "lucide-react";
-import { api, type EventDetail } from "../api";
+import { api, apiUrl, type EventDetail } from "../api";
 import { useApp, type EvidenceTarget } from "../state";
 import { EVENT_SHORT, FAMILY_INK, Loading, fmt, outcomeBadge, statusBadge, useEscape } from "../ui";
 
@@ -97,7 +97,7 @@ export default function EvidenceDrawer({ target }: { target: EvidenceTarget }) {
                   ? <span className="badge b-violet"><ScanText /> Scanned · OCR {Math.round((page.ocr_conf ?? 0) * 100)}% confidence</span>
                   : <span className="badge b-blue">Digital text</span>}
                 <span className="spacer" />
-                <a className="btn btn-sm" href={`/api/documents/${page.doc_id}/pdf#page=${page.page_no}`} target="_blank" rel="noreferrer">Open original PDF <ExternalLink /></a>
+                <a className="btn btn-sm" href={apiUrl(`/api/documents/${page.doc_id}/pdf#page=${page.page_no}`)} target="_blank" rel="noreferrer">Open original PDF <ExternalLink /></a>
               </div>
               <div className="paper"><pre className="page-text">{renderText()}</pre></div>
               <p className="small muted">

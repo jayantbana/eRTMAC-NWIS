@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { RotateCcw, ServerOff } from "lucide-react";
-import { api, type Meta } from "./api";
+import { api, API_BASE, type Meta } from "./api";
 import { Logo } from "./components/Chrome";
 import Landing from "./landing/Landing";
 import { useRoute } from "./router";
@@ -45,8 +45,14 @@ function ApiError({ err }: { err: string }) {
       <div className="err-card" role="alert">
         <div className="ic-tile t-saffron"><ServerOff aria-hidden /></div>
         <h1 style={{ fontSize: "1.75rem" }}>The NWIS service is not reachable</h1>
-        <p className="ink2">The workspace needs the NWIS API. Start it from the <code>backend</code> folder, then try again:</p>
-        <p><code>.venv/Scripts/python -m uvicorn nwis.api.main:app --port 8000</code></p>
+        {API_BASE ? (
+          <p className="ink2">The workspace could not reach the NWIS API at <code>{API_BASE}</code>. If it is on a free tier it may be waking up — wait a minute, then try again.</p>
+        ) : (
+          <>
+            <p className="ink2">The workspace needs the NWIS API. Start it from the <code>backend</code> folder, then try again:</p>
+            <p><code>.venv/Scripts/python -m uvicorn nwis.api.main:app --port 8000</code></p>
+          </>
+        )}
         <p className="small muted">Details: {err}</p>
         <div className="row wrap">
           <button className="btn btn-primary btn-lg" onClick={() => location.reload()}><RotateCcw /> Try again</button>
